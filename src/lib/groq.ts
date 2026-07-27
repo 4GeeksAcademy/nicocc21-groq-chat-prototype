@@ -1,9 +1,3 @@
-import Groq from "groq-sdk";
-
-const groq = new Groq({
-  apiKey: process.env.GROQ_API_KEY,
-});
-
 export interface ChatMessage {
   role: "user" | "assistant" | "system";
   content: string;
@@ -21,22 +15,41 @@ export interface ChatMetrics {
 }
 
 export async function chat(messages: ChatMessage[]): Promise<ChatMetrics> {
+  const apiKey = process.env.GROQ_API_KEY;
+  if (!apiKey) throw new Error("Falta la variable de entorno GROQ_API_KEY.");
+
   const start = performance.now();
 
-  const completion = await groq.chat.completions.create({
-    model: "llama-3.1-8b-instant",
-    messages: [
-      {
-        role: "system",
-        content:
-          "Eres un asistente útil y amigable. Responde en español de forma clara y concisa.",
+  const res = await fetch(
+    "https://api.groq.com/openai/v1/chat/completions",
+    {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${apiKey}`,
+        "Content-Type": "application/json",
       },
-      ...messages,
-    ],
-    temperature: 0.7,
-    max_tokens: 1024,
-  });
+      body: JSON.stringify({
+        model: "llama-3.1-8b-instant",
+        messages: [
+          {
+            role: "system",
+            content:
+              "Eres un asistente útil y amigable. Responde en español de forma clara y concisa.",
+          },
+          ...messages,
+        ],
+        temperature: 0.7,
+        max_tokens: 1024,
+      }),
+    }
+  );
 
+  if (!res.ok) {
+    const errBody = await res.text();
+    throw new Error(`Error de Groq (${res.status}): ${errBody}`);
+  }
+
+  const completion = await res.json();
   const responseTimeMs = Math.round(performance.now() - start);
 
   const choice = completion.choices[0];
